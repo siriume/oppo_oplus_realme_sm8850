@@ -650,7 +650,7 @@ jobs:
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfakestat.so
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfaketimeMT.so
           chmod 777 ./*.so
-          $TEMP_ISO_TIME=$(date -d "KBUILD_BUILD_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
+          TEMP_ISO_TIME=$(date -d "$KBUILD_BUILD_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
           export FAKESTAT="$TEMP_ISO_TIME"
           export FAKETIME="$TEMP_ISO_TIME"
           echo "FAKESTAT=$FAKESTAT" >> $GITHUB_ENV
