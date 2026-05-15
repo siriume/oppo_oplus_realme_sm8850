@@ -651,10 +651,13 @@ jobs:
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfaketimeMT.so
           chmod 777 ./*.so
           TEMP_ISO_TIME=$(date -d "$KBUILD_BUILD_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
+          TEMP_EPOCH=$(date -d "$KBUILD_BUILD_TIMESTAMP" +%s)
           export FAKESTAT="$TEMP_ISO_TIME"
           export FAKETIME="$TEMP_ISO_TIME"
+          export SOURCE_DATE_EPOCH="$TEMP_EPOCH"
           echo "FAKESTAT=$FAKESTAT" >> $GITHUB_ENV
           echo "FAKETIME=$FAKETIME" >> $GITHUB_ENV
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> $GITHUB_ENV
           SO_DIR=$(pwd)
           export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
           export REAL_CLANG_PATH="$WORKDIR/kernel_workspace/clang19/bin/clang"
@@ -727,9 +730,9 @@ jobs:
           sudo rm -rf /usr/local/lib/android &
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="clang" LD="ld.lld" OBJCOPY="llvm-objcopy" O=out KBUILD_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP" gki_defconfig &&
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="clang" LD="ld.lld" OBJCOPY="llvm-objcopy" O=out KBUILD_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP" SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" gki_defconfig &&
           export CC="$(pwd)/cc-wrapper" && export LD="$(pwd)/ld-wrapper" &&
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" OBJCOPY="llvm-objcopy" KBUILD_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP" O=out Image
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" OBJCOPY="llvm-objcopy" KBUILD_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP" SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" O=out Image
           
           # 编译后时间劫持二次校验
           echo "--- 编译后环境时间: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
