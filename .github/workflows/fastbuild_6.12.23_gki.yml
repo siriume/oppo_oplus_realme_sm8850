@@ -23,6 +23,11 @@ on:
           - 'ksunext'
           - 'ksu'
           - 'none'
+      ksu_branch:
+        description: 'BakaSU源码分支（手动输入，留空使用main；选择bakasu/sukisu时生效，版本号=主分支版本号-落后提交数）'
+        required: false
+        type: string
+        default: ''
       susfs_enable:
         description: '是否开启susfs(用于增强隐藏环境挂载功能; 可能轻微增加耗电，上游更新导致不稳定时或不需要可关闭)'
         required: true
@@ -253,16 +258,37 @@ jobs:
 
       - name: 添加KernelSU
         id: ksu_version
+        env:
+          KSU_BRANCH: ${{ inputs.ksu_branch || 'main' }}
         run: |
           # 进入内核工作目录
           cd kernel_workspace
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" || ${{ github.event.inputs.ksu_type }} == "bakasu" ]]; then
             echo "正在配置BakaSU（由于SukiSU长期未维护无法正常编译，且BakaSU兼容sukisu管理器，故SukiSU源码仓库已重定向为bakasu）..."
-            curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
+            git check-ref-format --branch "$KSU_BRANCH" > /dev/null
+            curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s -- "$KSU_BRANCH"
             echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@siriume"' >> ./common/arch/arm64/configs/gki_defconfig
             cd ./KernelSU
-            # 生成自定义版本号（基于提交计数）, 失败时使用 114514
-            KSU_VERSION=$(expr $(git rev-list --count HEAD) + 30700 2>/dev/null || echo 114514)
+            # setup.sh切换失败会回退到默认分支，显式检出以确保编译所选分支
+            git fetch origin "refs/heads/$KSU_BRANCH:refs/remotes/origin/$KSU_BRANCH"
+            git checkout -B "$KSU_BRANCH" "refs/remotes/origin/$KSU_BRANCH"
+            # 数字版本号=主分支版本号-落后提交数，领先的提交不增加版本号
+            BAKASU_MAIN_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD)
+            case "$BAKASU_MAIN_BRANCH" in
+              origin/main|origin/master) ;;
+              *) echo "::error::无法确定BakaSU的main/master主分支"; exit 1 ;;
+            esac
+            git fetch origin "${BAKASU_MAIN_BRANCH#origin/}:refs/remotes/$BAKASU_MAIN_BRANCH"
+            BAKASU_MAIN_COUNT=$(git rev-list --count "$BAKASU_MAIN_BRANCH")
+            BAKASU_BEHIND_COUNT=$(git rev-list --count "HEAD..$BAKASU_MAIN_BRANCH")
+            KSU_VERSION=$((BAKASU_MAIN_COUNT + 30700 - BAKASU_BEHIND_COUNT))
+            # 同步内核实际编译使用的版本号，而不只是修改发布信息
+            if ! grep -qE '^KSU_VERSION[[:space:]]*:=' kernel/Kbuild; then
+              echo "::error::BakaSU的版本号生成方式已变化，请检查kernel/Kbuild"
+              exit 1
+            fi
+            sed -i -E "s/^KSU_VERSION[[:space:]]*:=.*/KSU_VERSION := $KSU_VERSION/" kernel/Kbuild
+            echo "BakaSU源码分支: $KSU_BRANCH，主分支: $BAKASU_MAIN_BRANCH，落后提交数: $BAKASU_BEHIND_COUNT，版本号: $KSU_VERSION"
             # 存储版本号到 GitHub 环境变量
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
